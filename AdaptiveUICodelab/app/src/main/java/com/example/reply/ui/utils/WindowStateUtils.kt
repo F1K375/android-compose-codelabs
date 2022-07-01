@@ -17,7 +17,14 @@
 package com.example.reply.ui.utils
 
 import android.graphics.Rect
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.flowWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
@@ -49,6 +56,22 @@ fun isSeparating(foldFeature: FoldingFeature?): Boolean {
     contract { returns(true) implies (foldFeature != null) }
     return foldFeature?.state == FoldingFeature.State.FLAT && foldFeature.isSeparating
 }
+
+val ComponentActivity.devicePostureFlow
+get() = WindowInfoTracker.getOrCreate(this).windowLayoutInfo(this)
+    .flowWithLifecycle(lifecycle)
+    .map{ layoutInfo->
+        val foldingFeature = layoutInfo.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
+        when {
+            isBookPosture(foldingFeature) -> DevicePosture.BookPosture(foldingFeature.bounds)
+            isSeparating(foldingFeature) -> DevicePosture.Separating(foldingFeature.bounds, foldingFeature.orientation)
+            else -> DevicePosture.NormalPosture
+        }
+    }.stateIn(
+        scope = lifecycleScope,
+        started = SharingStarted.Eagerly,
+        initialValue = DevicePosture.NormalPosture
+    )
 
 /**
  * Different type of navigation supported by app depending on size and state.
